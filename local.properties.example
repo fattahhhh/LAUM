@@ -1,0 +1,13 @@
+## Salin isi di bawah ke file local.properties (file local.properties otomatis dibuat Android Studio).
+## Jangan commit local.properties ke GitHub.
+
+# Lokasi Android SDK (diisi otomatis oleh Android Studio, contoh di Windows):
+# sdk.dir=C\:\\Users\\NAMA_USER\\AppData\\Local\\Android\\Sdk
+
+# Opsional: isi API key gratis dari Google AI Studio (https://aistudio.google.com/apikey)
+# atau Groq Cloud (https://console.groq.com/keys).
+# Jika dikosongkan ATAU kuota/limit cloud habis, aplikasi otomatis memakai AI on-device (ML Kit) yang gratis & tanpa limit.
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash-lite
+GROQ_API_KEY=
+GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
