@@ -336,7 +336,7 @@ fun OnboardingScreen(
             )
         }
 
-        val logoBitmap = ImageBitmap.imageResource(id = R.drawable.con)
+        val logoBitmap = ImageBitmap.imageResource(id = R.drawable.conregis)
         Canvas(
             Modifier
                 .offset(x = d.x(64.5f), y = d.y(112f))
