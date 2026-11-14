@@ -54,6 +54,7 @@ import id.ac.pnj.resortcampus.data.Points
 import id.ac.pnj.resortcampus.data.RewardInfo
 import id.ac.pnj.resortcampus.data.ScanAnalysis
 import id.ac.pnj.resortcampus.util.ImageUtils
+import id.ac.pnj.resortcampus.util.tr
 import id.ac.pnj.resortcampus.ui.BinState
 import id.ac.pnj.resortcampus.ui.ScanFlowViewModel
 import id.ac.pnj.resortcampus.ui.WasteState
@@ -104,7 +105,7 @@ fun ResultScreen(
                 onClick = onRetake,
                 modifier = Modifier.size(38.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)),
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Kembali", "Back"), tint = Color.White)
             }
             Text("AI Scan", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
             Spacer(Modifier.size(38.dp))
@@ -118,10 +119,13 @@ fun ResultScreen(
         ) {
             when (val s = state) {
                 WasteState.Idle, WasteState.Analyzing -> {
-                    LoadingState("AI sedang menganalisis foto...", "Mengenali jenis sampah & cara buangnya")
+                    LoadingState(
+                        tr("AI sedang menganalisis foto...", "AI is analyzing your photo..."),
+                        tr("Mengenali jenis sampah & cara buangnya", "Identifying waste type & disposal method"),
+                    )
                 }
                 is WasteState.Failed -> {
-                    ErrorState(s.message, "Foto Ulang", onRetake)
+                    ErrorState(s.message, tr("Foto Ulang", "Retake Photo"), onRetake)
                 }
                 is WasteState.Done -> {
                     ResultBody(s.analysis, onRetake = onRetake, onGoToBin = onGoToBin, onSkip = onSkip)
@@ -154,8 +158,15 @@ private fun ResultBody(
     ) {
         // Chip status di atas
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip(if (valid) "Sampah Terdeteksi • $pct% akurat" else "Perlu Foto Ulang ($pct%)", danger = !valid)
-            if (analysis.usedMock) Chip("Mode Demo")
+            Chip(
+                if (valid) {
+                    tr("Sampah Terdeteksi • $pct% akurat", "Waste Detected • $pct% accurate")
+                } else {
+                    tr("Perlu Foto Ulang ($pct%)", "Retake Needed ($pct%)")
+                },
+                danger = !valid,
+            )
+            if (analysis.usedMock) Chip(tr("Mode Demo", "Demo Mode"))
         }
 
         // Tampilkan foto asli hasil CameraX ImageCapture jika ada, atau ilustrasi lingkaran daur ulang sesuai Figma
@@ -194,7 +205,10 @@ private fun ResultBody(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Kategori: ${r.category.capitalized()} • Material: ${r.material} • +${rule.points} poin",
+                tr(
+                    "Kategori: ${r.category.capitalized()} • Material: ${r.material} • +${rule.points} poin",
+                    "Category: ${r.category.capitalized()} • Material: ${r.material} • +${rule.points} pts",
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = Muted,
                 textAlign = TextAlign.Center,
@@ -204,17 +218,22 @@ private fun ResultBody(
         // Tombol utama sesuai posisi di Figma
         if (valid) {
             PrimaryButton(
-                text = "Pilih lokasi tong sampah",
+                text = tr("Pilih lokasi tong sampah", "Choose waste bin location"),
                 onClick = onGoToBin,
                 icon = Icons.Filled.Place,
                 modifier = Modifier.fillMaxWidth(),
+                shimmer = true,
             )
             TextButton(onClick = onSkip) {
-                Text("Saya hanya memeriksa saja (tanpa poin)", color = Muted, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    tr("Saya hanya memeriksa saja (tanpa poin)", "Just checking (no points)"),
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         } else {
             PrimaryButton(
-                text = "Foto Ulang Sampah",
+                text = tr("Foto Ulang Sampah", "Retake Waste Photo"),
                 onClick = onRetake,
                 icon = Icons.Filled.PhotoCamera,
                 modifier = Modifier.fillMaxWidth(),
@@ -242,7 +261,11 @@ private fun ResultBody(
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Instruksi Pembuangan (Tong ${binLabel(r.binType)})", style = MaterialTheme.typography.titleSmall, color = Green900)
+                Text(
+                    tr("Instruksi Pembuangan (Tong ${binLabel(r.binType)})", "Disposal Instructions (${binLabel(r.binType)} Bin)"),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Green900,
+                )
                 Spacer(Modifier.height(2.dp))
                 Text(r.disposalInstruction, style = MaterialTheme.typography.bodySmall, color = Muted)
             }
@@ -259,13 +282,13 @@ private fun ResultBody(
             ) {
                 Icon(Icons.Filled.Lightbulb, null, tint = GreenText, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Tips: ${r.tips}", style = MaterialTheme.typography.bodySmall, color = GreenText)
+                Text(tr("Tips: ${r.tips}", "Tip: ${r.tips}"), style = MaterialTheme.typography.bodySmall, color = GreenText)
             }
         }
 
         if (valid) {
             SecondaryButton(
-                text = "Foto Ulang",
+                text = tr("Foto Ulang", "Retake Photo"),
                 onClick = onRetake,
                 icon = Icons.Filled.Refresh,
                 modifier = Modifier.fillMaxWidth(),
@@ -276,7 +299,8 @@ private fun ResultBody(
             Icon(Icons.Filled.Info, null, tint = Muted, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
             Text(
-                "Dianalisis AI, bisa keliru." + if (analysis.usedMock) " (mode demo offline)" else "",
+                tr("Dianalisis AI, bisa keliru.", "Analyzed by AI, may make mistakes.") +
+                    if (analysis.usedMock) tr(" (mode demo offline)", " (offline demo mode)") else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = Muted,
             )
@@ -316,12 +340,15 @@ fun RewardScreen(
             when (val s = state) {
                 BinState.Idle, BinState.Verifying -> {
                     Box(Modifier.height(340.dp)) {
-                        LoadingState("Memverifikasi tong sampah...", "Mencatat poin untuk jurusanmu")
+                        LoadingState(
+                            tr("Memverifikasi tong sampah...", "Verifying waste bin..."),
+                            tr("Mencatat poin untuk jurusanmu", "Recording points for your major"),
+                        )
                     }
                 }
                 is BinState.Failed -> {
                     Box(Modifier.height(340.dp)) {
-                        ErrorState(s.message, "Foto Ulang Tong", onRetryBin)
+                        ErrorState(s.message, tr("Foto Ulang Tong", "Retake Bin Photo"), onRetryBin)
                     }
                 }
                 is BinState.Rewarded -> {
@@ -342,7 +369,7 @@ private fun RewardBody(reward: RewardInfo, onDone: () -> Unit, onScanAgain: () -
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Chip("Verifikasi Berhasil")
+        Chip(tr("Verifikasi Berhasil", "Verification Succeeded"))
 
         val context = LocalContext.current
         val capturedBinBitmap = remember(reward.photoUri) {
@@ -369,14 +396,17 @@ private fun RewardBody(reward: RewardInfo, onDone: () -> Unit, onScanAgain: () -
         }
 
         Text(
-            "Terimakasih, pahlawan kampus!",
+            tr("Terimakasih, pahlawan kampus!", "Thank you, campus hero!"),
             style = MaterialTheme.typography.titleLarge,
             color = Green900,
             fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Center,
         )
         Text(
-            "${reward.itemName} (${reward.category.capitalized()}) berhasil diverifikasi dan poin sudah ditambahkan ke jurusanmu.",
+            tr(
+                "${reward.itemName} (${reward.category.capitalized()}) berhasil diverifikasi dan poin sudah ditambahkan ke jurusanmu.",
+                "${reward.itemName} (${reward.category.capitalized()}) was verified and points have been added to your major.",
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = Muted,
             textAlign = TextAlign.Center,
@@ -387,13 +417,13 @@ private fun RewardBody(reward: RewardInfo, onDone: () -> Unit, onScanAgain: () -
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             RewardMetric(
-                value = "+${reward.points} poin",
-                label = "Poin jurusan",
+                value = tr("+${reward.points} poin", "+${reward.points} pts"),
+                label = tr("Poin jurusan", "Major points"),
                 modifier = Modifier.weight(1f),
             )
             RewardMetric(
                 value = formatKg(reward.co2eKg),
-                label = "CO2e (estimasi)",
+                label = tr("CO2e (estimasi)", "CO2e (est.)"),
                 modifier = Modifier.weight(1f),
             )
         }
@@ -404,18 +434,19 @@ private fun RewardBody(reward: RewardInfo, onDone: () -> Unit, onScanAgain: () -
         ) {
             Icon(Icons.Filled.Eco, null, tint = Muted, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
-            Text("Estimasi penghematan emisi karbon", style = MaterialTheme.typography.labelSmall, color = Muted)
+            Text(tr("Estimasi penghematan emisi karbon", "Estimated carbon emission savings"), style = MaterialTheme.typography.labelSmall, color = Muted)
         }
 
         Spacer(Modifier.height(4.dp))
 
         PrimaryButton(
-            text = "Koleksi poin!",
+            text = tr("Koleksi poin!", "Collect points!"),
             onClick = onDone,
             modifier = Modifier.fillMaxWidth(),
+            shimmer = true,
         )
         TextButton(onClick = onScanAgain) {
-            Text("Scan sampah lainnya", color = GreenText, fontWeight = FontWeight.Bold)
+            Text(tr("Scan sampah lainnya", "Scan another item"), color = GreenText, fontWeight = FontWeight.Bold)
         }
     }
 }

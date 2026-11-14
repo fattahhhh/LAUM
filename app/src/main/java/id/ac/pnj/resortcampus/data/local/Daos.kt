@@ -26,6 +26,9 @@ interface UserDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(user: UserEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(user: UserEntity)
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(users: List<UserEntity>)
 
@@ -37,6 +40,12 @@ interface UserDao {
 
     @Query("SELECT * FROM users WHERE id = :id")
     fun observeById(id: String): Flow<UserEntity?>
+
+    @Query("SELECT id FROM users")
+    suspend fun allIds(): List<String>
+
+    @Query("DELETE FROM users WHERE id LIKE 'peer-%' OR id = 'user-demo'")
+    suspend fun deleteLegacySeedUsers()
 }
 
 @Dao
@@ -94,6 +103,24 @@ interface ContributionDao {
 
     @Query(
         """
+        SELECT u.id AS userId,
+               u.name AS userName,
+               COALESCE(m.id, 'tik') AS majorId,
+               COALESCE(m.name, 'Teknik Informatika dan Komputer') AS majorName,
+               COALESCE(m.faculty, 'Rekayasa') AS faculty,
+               COALESCE(SUM(CASE WHEN c.createdAt >= :since THEN c.points ELSE 0 END), 0) AS points
+        FROM users u
+        LEFT JOIN majors m ON m.id = u.majorId
+        LEFT JOIN contributions c ON c.userId = u.id
+        WHERE u.id != 'user-demo' AND u.id NOT LIKE 'peer-%'
+        GROUP BY u.id
+        ORDER BY points DESC, u.name ASC
+        """
+    )
+    fun observeUserLeaderboard(since: Long): Flow<List<UserScoreRow>>
+
+    @Query(
+        """
         SELECT COUNT(*) AS items, COALESCE(SUM(points), 0) AS points, COALESCE(SUM(co2eKg), 0) AS co2eKg
         FROM contributions WHERE userId = :userId
         """
@@ -112,6 +139,15 @@ interface BinDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<BinLocationEntity>)
 
-    @Query("SELECT * FROM bin_locations ORDER BY name")
+    @Query("DELETE FROM bin_locations")
+    suspend fun deleteAll()
+
+    @Query("SELECT id FROM bin_locations")
+    suspend fun allIds(): List<String>
+
+    @Query("SELECT COUNT(*) FROM bin_locations")
+    suspend fun count(): Int
+
+    @Query("SELECT * FROM bin_locations ORDER BY areaLabel, name")
     fun observeAll(): Flow<List<BinLocationEntity>>
 }

@@ -123,11 +123,7 @@ class WasteClassifier(
 
         val cloudBin = tryCloudBin(jpeg)
         if (cloudBin != null) {
-            return if (!cloudBin.isBin || cloudBin.confidence < Points.MIN_CONFIDENCE) {
-                AiOutcome(MockAi.verifyBin(), usedMock = true)
-            } else {
-                AiOutcome(cloudBin, usedMock = false)
-            }
+            return AiOutcome(cloudBin, usedMock = false)
         }
 
         return try {
@@ -137,7 +133,7 @@ class WasteClassifier(
             throw e
         } catch (e: Exception) {
             Log.w("WasteClassifier", "On-device verifyBin gagal: ${e.message}")
-            AiOutcome(MockAi.verifyBin(), usedMock = true)
+            AiOutcome(BinVerifyResult(isBin = false, confidence = 0.0), usedMock = false)
         }
     }
 
@@ -333,10 +329,13 @@ class WasteClassifier(
                 "\"tips\": string}. Gunakan Bahasa Indonesia yang singkat."
 
         const val BIN_SYSTEM =
-            "Kamu memverifikasi foto tempat sampah. Balas HANYA JSON valid tanpa markdown."
+            "Kamu memverifikasi apakah foto benar-benar menampilkan tempat sampah / tong sampah / drop box sampah. " +
+                "Balas HANYA JSON valid tanpa markdown. " +
+                "Set is_bin=false jika foto hanya menampilkan sampah lepas (misal botol, kaleng, kertas, makanan), " +
+                "wajah/orang, tembok, meja, gadget, atau benda lain yang BUKAN tempat sampah."
 
         const val BIN_USER =
-            "Apakah foto ini menampilkan tong atau tempat sampah? " +
+            "Apakah foto ini benar-benar menampilkan tempat sampah atau tong sampah? " +
                 "Format JSON: {\"is_bin\": boolean, \"confidence\": number 0-1}."
     }
 }

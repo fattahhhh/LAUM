@@ -116,6 +116,16 @@ data class MajorScoreRow(
     val points: Int,
 )
 
+/** Hasil agregasi leaderboard per user beserta jurusannya. */
+data class UserScoreRow(
+    val userId: String,
+    val userName: String,
+    val majorId: String,
+    val majorName: String,
+    val faculty: String,
+    val points: Int,
+)
+
 /** Ringkasan statistik user. */
 data class UserStatsRow(
     val items: Int,

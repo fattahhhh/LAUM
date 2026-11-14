@@ -15,7 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.example.laum.R
+import id.ac.pnj.resortcampus.R
 import com.example.laum.ui.login.LoginColors
 
 @Composable

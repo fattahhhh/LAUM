@@ -132,30 +132,46 @@ object OnDeviceWasteClassifier {
     }
 
     internal fun verifyBinLabels(labels: List<Pair<String, Float>>): BinVerifyResult {
-        if (labels.isEmpty()) return BinVerifyResult(isBin = false, confidence = 0.3)
+        if (labels.isEmpty()) return BinVerifyResult(isBin = false, confidence = 0.2)
 
-        val binMatch = labels.filter { (raw, _) ->
+        val strongMatch = labels.filter { (raw, _) ->
             val t = raw.lowercase()
-            BIN_KEYWORDS.any { it in t }
+            val tokens = t.split(' ', '-', '_')
+            STRONG_BIN_KEYWORDS.any { it in t } || "bin" in tokens
         }.maxByOrNull { it.second }
 
-        if (binMatch != null) {
+        if (strongMatch != null) {
             return BinVerifyResult(
                 isBin = true,
-                confidence = binMatch.second.toDouble().coerceAtLeast(0.75).coerceAtMost(0.96),
+                confidence = strongMatch.second.toDouble().coerceIn(0.75, 0.96),
             )
         }
 
-        val nonBinHit = labels.firstOrNull { (raw, _) ->
+        val hasContradiction = labels.any { (raw, _) ->
             val t = raw.lowercase()
-            NON_WASTE_KEYWORDS.any { it in t }
+            val tokens = t.split(' ', '-', '_')
+            NOT_A_BIN_CONTRADICTIONS.any { kw ->
+                if (' ' in kw) kw in t else kw in tokens
+            }
         }
-        if (nonBinHit != null) {
-            return BinVerifyResult(isBin = false, confidence = 0.35)
+        if (hasContradiction) {
+            return BinVerifyResult(isBin = false, confidence = 0.25)
         }
 
-        val topConf = labels.maxOf { it.second }.toDouble()
-        return BinVerifyResult(isBin = topConf >= 0.55, confidence = topConf.coerceIn(0.5, 0.82))
+        val containerMatch = labels.filter { (raw, _) ->
+            val t = raw.lowercase()
+            val tokens = t.split(' ', '-', '_')
+            CONTAINER_BIN_KEYWORDS.any { it in tokens || it in t }
+        }.maxByOrNull { it.second }
+
+        return if (containerMatch != null) {
+            BinVerifyResult(
+                isBin = true,
+                confidence = containerMatch.second.toDouble().coerceIn(0.65, 0.90),
+            )
+        } else {
+            BinVerifyResult(isBin = false, confidence = 0.25)
+        }
     }
 
     private fun templateFor(
@@ -312,8 +328,19 @@ object OnDeviceWasteClassifier {
         "sky", "cloud", "wall", "ceiling", "building", "car", "vehicle", "landscape", "mountain",
     )
 
-    private val BIN_KEYWORDS = setOf(
-        "waste container", "trash", "garbage", "bin", "bucket", "basket",
-        "container", "barrel", "tub", "cylinder", "box", "recycling", "plastic", "metal",
+    private val STRONG_BIN_KEYWORDS = setOf(
+        "waste container", "trash", "garbage", "dustbin", "recycling", "litter",
+    )
+
+    private val CONTAINER_BIN_KEYWORDS = setOf(
+        "bucket", "pail", "basket", "container", "barrel", "tub", "drum", "canister",
+    )
+
+    private val NOT_A_BIN_CONTRADICTIONS = setOf(
+        "person", "selfie", "face", "smile", "hair", "skin", "portrait", "hand",
+        "sky", "cloud", "wall", "ceiling", "building", "car", "vehicle", "landscape", "mountain",
+        "bottle", "water bottle", "drinkware", "cup", "food", "fruit", "vegetable", "snack",
+        "laptop", "computer", "keyboard", "mouse", "phone", "mobile phone", "book", "paper",
+        "shoe", "clothing", "flower", "plant", "toy",
     )
 }

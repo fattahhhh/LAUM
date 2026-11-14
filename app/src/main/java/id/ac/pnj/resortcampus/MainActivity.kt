@@ -13,6 +13,10 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import id.ac.pnj.resortcampus.ui.AppNavHost
 import id.ac.pnj.resortcampus.ui.StartViewModel
 import id.ac.pnj.resortcampus.ui.theme.ReSortTheme
+import id.ac.pnj.resortcampus.util.NotificationHelper
+import id.ac.pnj.resortcampus.util.NotifType
+import id.ac.pnj.resortcampus.util.ReminderScheduler
+import id.ac.pnj.resortcampus.util.SettingsStore
 
 class MainActivity : ComponentActivity() {
 
@@ -25,7 +29,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
-        // Splash tetap tampil sampai seed database & cek login selesai.
+        SettingsStore.init(this)
+        if (SettingsStore.enabled(NotifType.REMINDER) && NotificationHelper.hasPermission(this)) {
+            ReminderScheduler.schedule(this)
+        }
         splash.setKeepOnScreenCondition { startViewModel.loggedIn.value == null }
         enableEdgeToEdge()
 

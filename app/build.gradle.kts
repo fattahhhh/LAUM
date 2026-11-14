@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services)
 }
 
 // API key Gemini dibaca dari local.properties (tidak ikut ke Git).
@@ -23,7 +24,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "id.ac.pnj.resortcampus"
+        applicationId = "com.example.laum"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -99,6 +100,12 @@ dependencies {
     implementation(libs.mlkit.image.labeling)
     implementation(libs.osmdroid)
     implementation(libs.play.services.location)
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.guava)
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.exifinterface)

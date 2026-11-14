@@ -48,6 +48,7 @@ private val majorOptions = listOf(
     "Teknik Sipil",
     "Teknik Mesin",
     "Teknik Elektro",
+    "Teknik Grafika dan Penerbitan",
     "Akuntansi",
     "Administrasi Niaga"
 )

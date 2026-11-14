@@ -14,15 +14,14 @@ import androidx.navigation.navArgument
 import id.ac.pnj.resortcampus.ui.screens.BinsScreen
 import id.ac.pnj.resortcampus.ui.screens.HomeScreen
 import id.ac.pnj.resortcampus.ui.screens.LeaderboardScreen
-import id.ac.pnj.resortcampus.ui.screens.LoginScreen
 import id.ac.pnj.resortcampus.ui.screens.OnboardingScreen
 import id.ac.pnj.resortcampus.ui.screens.ProfileScreen
-import id.ac.pnj.resortcampus.ui.screens.RegisterScreen
 import id.ac.pnj.resortcampus.ui.screens.ResultScreen
 import id.ac.pnj.resortcampus.ui.screens.RewardScreen
 import id.ac.pnj.resortcampus.ui.screens.ScanMode
 import id.ac.pnj.resortcampus.ui.screens.ScanScreen
 import id.ac.pnj.resortcampus.ui.screens.SettingScreen
+import id.ac.pnj.resortcampus.util.SettingsStore
 
 object Routes {
     const val ONBOARDING = "onboarding"
@@ -57,6 +56,7 @@ fun AppNavHost(startLoggedIn: Boolean, activityOwner: ViewModelStoreOwner) {
 
     val goHomeClearingAuth: () -> Unit = remember(nav) {
         {
+            SettingsStore.advanceFunFact()
             nav.navigate(Routes.HOME) {
                 popUpTo(nav.graph.id) { inclusive = true }
             }
@@ -69,28 +69,35 @@ fun AppNavHost(startLoggedIn: Boolean, activityOwner: ViewModelStoreOwner) {
         enterTransition = { fadeIn() },
         exitTransition = { fadeOut() },
     ) {
+        // Layar awal: sekarang memakai OnboardingScreen (AuthScreens.kt), bukan WelcomeScreen lama.
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 onLogin = { nav.navigate(Routes.LOGIN) },
                 onRegister = { nav.navigate(Routes.REGISTER) },
+                onSettings = { nav.navigate(Routes.SETTINGS) },
             )
         }
         composable(Routes.LOGIN) {
-            LoginScreen(
-                onBack = { nav.popBackStack() },
-                onSuccess = goHomeClearingAuth,
-                onGoRegister = {
+            FirebaseLoginRoute(
+                onClose = {
+                    if (!nav.popBackStack()) {
+                        nav.navigate(Routes.ONBOARDING) { launchSingleTop = true }
+                    }
+                },
+                onRegisterClick = {
                     nav.navigate(Routes.REGISTER) { popUpTo(Routes.LOGIN) { inclusive = true } }
                 },
+                onSuccess = goHomeClearingAuth,
             )
         }
         composable(Routes.REGISTER) {
-            RegisterScreen(
-                onBack = { nav.popBackStack() },
-                onSuccess = goHomeClearingAuth,
-                onGoLogin = {
-                    nav.navigate(Routes.LOGIN) { popUpTo(Routes.REGISTER) { inclusive = true } }
+            FirebaseRegisterRoute(
+                onClose = {
+                    if (!nav.popBackStack()) {
+                        nav.navigate(Routes.ONBOARDING) { launchSingleTop = true }
+                    }
                 },
+                onSuccess = goHomeClearingAuth,
             )
         }
         composable(Routes.SETTINGS) {

@@ -93,6 +93,7 @@ import id.ac.pnj.resortcampus.data.ai.MockAi
 import id.ac.pnj.resortcampus.ui.ScanFlowViewModel
 import id.ac.pnj.resortcampus.ui.components.SecondaryButton
 import id.ac.pnj.resortcampus.ui.components.binLabel
+import id.ac.pnj.resortcampus.util.tr
 import id.ac.pnj.resortcampus.ui.components.categoryIcon
 import id.ac.pnj.resortcampus.ui.theme.Green500
 import id.ac.pnj.resortcampus.ui.theme.Green900
@@ -122,7 +123,7 @@ fun ScanScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val pending by scanFlow.pending.collectAsStateWithLifecycle()
-    var mode by rememberSaveable { mutableStateOf(initialMode) }
+    var mode by rememberSaveable(initialMode) { mutableStateOf(initialMode) }
     var selectedSampleIdx by rememberSaveable { mutableIntStateOf(0) }
     var showGallerySheet by rememberSaveable { mutableStateOf(false) }
 
@@ -462,13 +463,13 @@ private fun CameraXCaptureContent(
                     .padding(3.dp),
             ) {
                 ModeChip(
-                    label = "Sampah",
+                    label = tr("Sampah", "Waste"),
                     active = mode == ScanMode.WASTE,
                     enabled = true,
                     onClick = { onModeChange(ScanMode.WASTE) },
                 )
                 ModeChip(
-                    label = "Tong",
+                    label = tr("Tong", "Bin"),
                     active = mode == ScanMode.BIN,
                     enabled = canVerifyBin,
                     onClick = { onModeChange(ScanMode.BIN) },
@@ -595,11 +596,21 @@ private fun CameraXCaptureContent(
             ) {
                 val hint = when {
                     mode == ScanMode.WASTE && isStreaming ->
-                        liveHint?.let { "Terdeteksi: ${it.name} (${(it.confidence * 100).toInt()}%) • tekan potret" }
-                            ?: "Arahkan ke objek sampah lalu potret"
-                    mode == ScanMode.BIN && isStreaming -> "CameraX Aktif • Potret tong ${binLabel(pendingBinType ?: "anorganik")}"
-                    mode == ScanMode.BIN && pendingItemName != null -> "Buang $pendingItemName ke tong ${binLabel(pendingBinType ?: "anorganik")}"
-                    else -> "Siapkan objek di dalam bingkai"
+                        liveHint?.let {
+                            tr(
+                                "Terdeteksi: ${it.name} (${(it.confidence * 100).toInt()}%) • tekan potret",
+                                "Detected: ${it.name} (${(it.confidence * 100).toInt()}%) • tap capture",
+                            )
+                        } ?: tr("Arahkan ke objek sampah lalu potret", "Point at waste item then capture")
+                    mode == ScanMode.BIN && isStreaming -> tr(
+                        "CameraX Aktif • Potret tong ${binLabel(pendingBinType ?: "anorganik")}",
+                        "CameraX Active • Capture ${binLabel(pendingBinType ?: "anorganik")} bin",
+                    )
+                    mode == ScanMode.BIN && pendingItemName != null -> tr(
+                        "Buang $pendingItemName ke tong ${binLabel(pendingBinType ?: "anorganik")}",
+                        "Drop $pendingItemName into ${binLabel(pendingBinType ?: "anorganik")} bin",
+                    )
+                    else -> tr("Siapkan objek di dalam bingkai", "Place object inside the frame")
                 }
                 Text(
                     hint,
@@ -608,6 +619,40 @@ private fun CameraXCaptureContent(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
                 )
+            }
+
+            // Tombol Flash di pojok kanan atas viewfinder bila ada lampu flash
+            if (hasFlashUnit && !preferFront) {
+                Surface(
+                    onClick = {
+                        val next = !torchOn
+                        torchOn = next
+                        camera?.cameraControl?.enableTorch(next)
+                    },
+                    shape = CircleShape,
+                    color = if (torchOn) id.ac.pnj.resortcampus.ui.theme.Amber else Green900.copy(alpha = 0.85f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 54.dp, end = 14.dp),
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            if (torchOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
+                            contentDescription = "Flash",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            if (torchOn) "ON" else "Flash",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
             }
 
             // Tombol Pill "Ambil Foto Sampah" / "Foto Tong Sampah" di bagian bawah viewfinder sesuai Figma
@@ -622,9 +667,9 @@ private fun CameraXCaptureContent(
             ) {
                 Text(
                     text = when {
-                        taking -> "Mengambil Foto..."
-                        mode == ScanMode.WASTE -> "Ambil Foto Sampah"
-                        else -> "Foto Tong Sampah"
+                        taking -> tr("Mengambil Foto...", "Taking Photo...")
+                        mode == ScanMode.WASTE -> tr("Ambil Foto Sampah", "Take Waste Photo")
+                        else -> tr("Foto Tong Sampah", "Take Bin Photo")
                     },
                     color = Color.White,
                     style = MaterialTheme.typography.labelLarge,
@@ -634,62 +679,57 @@ private fun CameraXCaptureContent(
             }
         }
 
-        // Kontrol kamera bawah sesuai Figma: Galeri (kiri), Shutter Bulat Putih (tengah), Flash/Putar (kanan)
+        // Kontrol kamera bawah: 3 slot sama lebar -> shutter selalu tepat di tengah
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 28.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BottomPillAction(
-                label = "Galeri",
-                icon = Icons.Filled.PhotoLibrary,
-                active = false,
-                onClick = onOpenGallery,
-            )
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                BottomPillAction(
+                    label = tr("Galeri", "Gallery"),
+                    icon = Icons.Filled.PhotoLibrary,
+                    active = false,
+                    onClick = onOpenGallery,
+                )
+            }
 
             // Tombol Shutter Bulat Putih CameraX
-            Box(
-                Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .border(4.dp, Color.White, CircleShape)
-                    .padding(6.dp)
-                    .clip(CircleShape)
-                    .background(if (taking) Color.LightGray else Color.White)
-                    .clickable(enabled = !taking, onClick = triggerRealCameraXCapture),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (taking) {
-                    CircularProgressIndicator(Modifier.size(26.dp), color = Green900, strokeWidth = 3.dp)
-                } else {
-                    Icon(
-                        Icons.Filled.PhotoCamera,
-                        contentDescription = "Potret CameraX",
-                        tint = Green900,
-                        modifier = Modifier.size(28.dp),
-                    )
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .border(4.dp, Color.White, CircleShape)
+                        .padding(6.dp)
+                        .clip(CircleShape)
+                        .background(if (taking) Color.LightGray else Color.White)
+                        .clickable(enabled = !taking, onClick = triggerRealCameraXCapture),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (taking) {
+                        CircularProgressIndicator(Modifier.size(26.dp), color = Green900, strokeWidth = 3.dp)
+                    } else {
+                        Icon(
+                            Icons.Filled.PhotoCamera,
+                            contentDescription = tr("Potret", "Capture"),
+                            tint = Green900,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
                 }
             }
 
-            if (hasFlashUnit) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 BottomPillAction(
-                    label = if (torchOn) "Flash On" else "Flash",
-                    icon = if (torchOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
-                    active = torchOn,
-                    onClick = {
-                        val next = !torchOn
-                        torchOn = next
-                        camera?.cameraControl?.enableTorch(next)
-                    },
-                )
-            } else {
-                BottomPillAction(
-                    label = "Putar",
+                    label = if (preferFront) tr("Depan", "Front") else tr("Belakang", "Back"),
                     icon = Icons.Filled.Cameraswitch,
                     active = preferFront,
-                    onClick = { preferFront = !preferFront },
+                    onClick = {
+                        torchOn = false
+                        preferFront = !preferFront
+                    },
                 )
             }
         }
@@ -964,19 +1004,26 @@ private fun BottomPillAction(
     active: Boolean,
     onClick: () -> Unit,
 ) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        color = if (active) Green500 else Color.White.copy(alpha = 0.14f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    // Tombol bulat ukuran tetap + label pendek di bawah, agar kiri & kanan simetris
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(
+            onClick = onClick,
+            shape = CircleShape,
+            color = if (active) Green500 else Color.White.copy(alpha = 0.14f),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+            modifier = Modifier.size(52.dp),
         ) {
-            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(label, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp))
+            }
         }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            label,
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
     }
 }

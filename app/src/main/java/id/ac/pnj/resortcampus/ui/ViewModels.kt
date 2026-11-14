@@ -114,6 +114,7 @@ class AuthViewModel(private val repo: Repository) : ViewModel() {
 data class HomeUiState(
     val user: CurrentUser? = null,
     val myMajor: LeaderboardEntry? = null,
+    val board: List<LeaderboardEntry> = emptyList(),
     val totalMajors: Int = 0,
     val stats: UserStatsRow = UserStatsRow(0, 0, 0.0),
     val streak: Int = 0,
@@ -128,9 +129,12 @@ class HomeViewModel(repo: Repository) : ViewModel() {
             repo.userStats(cu.user.id),
             repo.streak(cu.user.id),
         ) { board, stats, streak ->
+            val mine = board.firstOrNull { it.userId == cu.user.id }
+                ?: board.firstOrNull { it.majorId == cu.user.majorId }
             HomeUiState(
                 user = cu,
-                myMajor = board.firstOrNull { it.majorId == cu.user.majorId },
+                myMajor = mine,
+                board = board,
                 totalMajors = board.size,
                 stats = stats,
                 streak = streak,
@@ -144,6 +148,7 @@ class HomeViewModel(repo: Repository) : ViewModel() {
 data class LeaderboardUiState(
     val period: Period = Period.WEEK,
     val entries: List<LeaderboardEntry> = emptyList(),
+    val myUserId: String? = null,
     val myMajorId: String? = null,
     val loading: Boolean = true,
 )
@@ -157,7 +162,13 @@ class LeaderboardViewModel(repo: Repository) : ViewModel() {
         period.flatMapLatest { repo.leaderboard(it) },
         repo.currentUser,
     ) { p, entries, cu ->
-        LeaderboardUiState(p, entries, cu?.user?.majorId, loading = false)
+        LeaderboardUiState(
+            period = p,
+            entries = entries,
+            myUserId = cu?.user?.id,
+            myMajorId = cu?.user?.majorId,
+            loading = false,
+        )
     }.stateIn(viewModelScope, WHILE_SUBSCRIBED, LeaderboardUiState())
 
     fun setPeriod(p: Period) {
@@ -173,20 +184,36 @@ data class ProfileUiState(
     val history: List<ContributionEntity> = emptyList(),
     val streak: Int = 0,
     val aiConfigured: Boolean = false,
+    val majors: List<MajorEntity> = emptyList(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProfileViewModel(private val repo: Repository) : ViewModel() {
+    private val majorsFlow = MutableStateFlow<List<MajorEntity>>(emptyList())
+
+    init {
+        viewModelScope.launch {
+            majorsFlow.value = repo.majors()
+        }
+    }
+
     val state: StateFlow<ProfileUiState> = repo.currentUser.flatMapLatest { cu ->
         if (cu == null) flowOf(ProfileUiState(aiConfigured = repo.isAiConfigured))
         else combine(
             repo.userStats(cu.user.id),
             repo.history(cu.user.id),
             repo.streak(cu.user.id),
-        ) { stats, history, streak ->
-            ProfileUiState(cu, stats, history, streak, repo.isAiConfigured)
+            majorsFlow,
+        ) { stats, history, streak, majors ->
+            ProfileUiState(cu, stats, history, streak, repo.isAiConfigured, majors)
         }
     }.stateIn(viewModelScope, WHILE_SUBSCRIBED, ProfileUiState())
+
+    fun updateProfile(name: String, majorId: String) {
+        viewModelScope.launch {
+            repo.updateProfile(name, majorId)
+        }
+    }
 
     fun logout(onDone: () -> Unit) {
         viewModelScope.launch {

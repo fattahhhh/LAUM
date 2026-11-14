@@ -3,6 +3,7 @@ package id.ac.pnj.resortcampus.data
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.example.laum.data.AuthRepository
 import id.ac.pnj.resortcampus.data.ai.WasteClassifier
 import id.ac.pnj.resortcampus.data.ai.WasteResult
 import id.ac.pnj.resortcampus.data.local.AppDatabase
@@ -13,6 +14,7 @@ import id.ac.pnj.resortcampus.data.local.MajorScoreRow
 import id.ac.pnj.resortcampus.data.local.ScanSessionEntity
 import id.ac.pnj.resortcampus.data.local.ScanStatus
 import id.ac.pnj.resortcampus.data.local.UserEntity
+import id.ac.pnj.resortcampus.data.local.UserScoreRow
 import id.ac.pnj.resortcampus.data.local.UserStatsRow
 import id.ac.pnj.resortcampus.util.ImageUtils
 import androidx.room.withTransaction
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -33,9 +36,9 @@ import java.util.UUID
 class UserFacingException(message: String) : Exception(message)
 
 enum class Period(val label: String, val days: Long) {
-    WEEK("Minggu", 7),
+    WEEK("Mingguan", 7),
     MONTH("Bulanan", 30),
-    SEMESTER("Semester", 182),
+    SEMESTER("Satu Semester", 182),
 }
 
 data class CurrentUser(val user: UserEntity, val major: MajorEntity?)
@@ -46,6 +49,8 @@ data class LeaderboardEntry(
     val name: String,
     val faculty: String,
     val points: Int,
+    val userId: String = "",
+    val majorName: String = "",
 )
 
 data class ScanAnalysis(
@@ -88,8 +93,89 @@ class Repository(
     }
 
     suspend fun isLoggedIn(): Boolean {
-        val id = session.currentUserId() ?: return false
-        return db.userDao().getById(id) != null
+        val uid = AuthRepository.currentUid()
+        if (uid == null) {
+            session.clear()
+            return false
+        }
+        if (db.userDao().getById(uid) != null) {
+            session.save(uid)
+            return true
+        }
+        val sessionId = session.currentUserId()
+        val sessionUser = sessionId?.let { db.userDao().getById(it) }
+        val firebaseEmail = AuthRepository.currentEmail()?.trim()?.lowercase()
+        if (sessionUser != null && (firebaseEmail == null || sessionUser.email.equals(firebaseEmail, ignoreCase = true))) {
+            return true
+        }
+        return syncFirebaseUser()
+    }
+
+    /**
+     * Menyelaraskan akun Firebase aktif ke Room [UserDao] dan menyimpan sesi lokal.
+     */
+    suspend fun syncFirebaseUser(
+        fallbackName: String? = null,
+        fallbackEmail: String? = null,
+        fallbackMajorName: String? = null,
+    ): Boolean {
+        val uid = AuthRepository.currentUid() ?: return false
+        val profile = withTimeoutOrNull(4_000L) { AuthRepository.fetchCurrentProfile() }
+        val existingById = db.userDao().getById(uid)
+
+        val rawEmail = (profile?.email?.takeIf { it.isNotBlank() }
+            ?: fallbackEmail?.takeIf { it.isNotBlank() }
+            ?: AuthRepository.currentEmail()?.takeIf { it.isNotBlank() }
+            ?: existingById?.email
+            ?: "$uid@pnj.local").trim().lowercase()
+        val rawName = (profile?.username?.takeIf { it.isNotBlank() }
+            ?: fallbackName?.trim()?.takeIf { it.isNotBlank() }
+            ?: existingById?.name
+            ?: rawEmail.substringBefore("@").ifBlank { "Mahasiswa PNJ" })
+        val rawMajor = profile?.major?.takeIf { it.isNotBlank() } ?: fallbackMajorName
+        val majors = db.majorDao().getAll()
+        val resolvedMajorId = rawMajor?.let { majorName ->
+            majors.firstOrNull { it.name.equals(majorName.trim(), ignoreCase = true) }?.id
+                ?: majors.firstOrNull { it.id.equals(majorName.trim(), ignoreCase = true) }?.id
+        } ?: existingById?.majorId ?: majors.firstOrNull()?.id ?: "tik"
+
+        val existingByEmail = db.userDao().findByEmail(rawEmail)
+        val userId = when {
+            existingById != null -> {
+                db.userDao().upsert(
+                    existingById.copy(
+                        name = rawName,
+                        email = rawEmail,
+                        majorId = resolvedMajorId,
+                    )
+                )
+                existingById.id
+            }
+            existingByEmail != null -> {
+                db.userDao().upsert(
+                    existingByEmail.copy(
+                        name = rawName,
+                        majorId = resolvedMajorId,
+                    )
+                )
+                existingByEmail.id
+            }
+            else -> {
+                db.userDao().upsert(
+                    UserEntity(
+                        id = uid,
+                        name = rawName,
+                        email = rawEmail,
+                        passwordHash = "",
+                        majorId = resolvedMajorId,
+                        createdAt = System.currentTimeMillis(),
+                    )
+                )
+                uid
+            }
+        }
+        session.save(userId)
+        return true
     }
 
     suspend fun login(email: String, password: String): Result<Unit> = runCatching {
@@ -116,9 +202,19 @@ class Repository(
         session.save(user.id)
     }
 
-    suspend fun logout() = session.clear()
+    suspend fun logout() {
+        AuthRepository.logout()
+        session.clear()
+    }
 
     suspend fun majors(): List<MajorEntity> = db.majorDao().getAll()
+
+    suspend fun updateProfile(name: String, majorId: String) {
+        val uid = session.currentUserId() ?: return
+        val existing = db.userDao().getById(uid) ?: return
+        val trimmed = name.trim().ifBlank { existing.name }
+        db.userDao().upsert(existing.copy(name = trimmed, majorId = majorId))
+    }
 
     // ---------- Scan ----------
 
@@ -221,7 +317,7 @@ class Repository(
         }
         val bin = classifier.verifyBin(jpeg, isSimulated = isSimulated || jpeg.isEmpty())
         if (!bin.value.isBin || bin.value.confidence < Points.MIN_CONFIDENCE) {
-            throw UserFacingException("Tong sampah tidak terdeteksi dengan jelas. Coba foto ulang.")
+            throw UserFacingException("Bukan tempat sampah atau tong sampah belum terlihat jelas. Coba foto ulang tempat sampahnya.")
         }
 
         val rule = Points.ruleFor(s.category)
@@ -255,7 +351,7 @@ class Repository(
 
     fun leaderboard(period: Period): Flow<List<LeaderboardEntry>> {
         val since = System.currentTimeMillis() - period.days * 24 * 60 * 60 * 1000L
-        return db.contributionDao().observeLeaderboard(since).map { rows -> rows.ranked() }
+        return db.contributionDao().observeUserLeaderboard(since).map { rows -> rows.rankedUsers() }
     }
 
     fun userStats(userId: String): Flow<UserStatsRow> = db.contributionDao().observeUserStats(userId)
@@ -287,6 +383,19 @@ class Repository(
 
     private fun List<MajorScoreRow>.ranked(): List<LeaderboardEntry> =
         mapIndexed { i, r -> LeaderboardEntry(i + 1, r.majorId, r.name, r.faculty, r.points) }
+
+    private fun List<UserScoreRow>.rankedUsers(): List<LeaderboardEntry> =
+        mapIndexed { i, r ->
+            LeaderboardEntry(
+                rank = i + 1,
+                majorId = r.majorId,
+                name = r.userName,
+                faculty = r.faculty,
+                points = r.points,
+                userId = r.userId,
+                majorName = r.majorName,
+            )
+        }
 
     private companion object {
         val EMAIL_REGEX = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")

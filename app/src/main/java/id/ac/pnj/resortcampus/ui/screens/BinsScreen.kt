@@ -91,22 +91,66 @@ import id.ac.pnj.resortcampus.ui.theme.GreenSoft
 import id.ac.pnj.resortcampus.ui.theme.GreenText
 import id.ac.pnj.resortcampus.ui.theme.Line
 import id.ac.pnj.resortcampus.ui.theme.Muted
+import id.ac.pnj.resortcampus.util.tr
+import java.io.File
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.TileSourcePolicy
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import kotlin.math.roundToInt
 
-private val PNJ_CENTER = GeoPoint(-6.371551, 106.824218)
+private val PNJ_CENTER = GeoPoint(-6.371450, 106.824100)
+
+private val PNJ_OSM_TILE_SOURCE = XYTileSource(
+    "OSM-PNJ",
+    0,
+    19,
+    256,
+    ".png",
+    arrayOf("https://tile.openstreetmap.org/"),
+    "© OpenStreetMap contributors",
+    TileSourcePolicy(
+        2,
+        TileSourcePolicy.FLAG_NO_BULK or TileSourcePolicy.FLAG_NO_PREVENTIVE,
+    ),
+)
 
 private val PNJ_BIN_COORDINATES: Map<String, GeoPoint> = mapOf(
-    "bin-1" to GeoPoint(-6.370832, 106.824621), // Tong Depan Gedung Direktorat
-    "bin-2" to GeoPoint(-6.371780, 106.824520), // Tong Kantin Pusat
-    "bin-3" to GeoPoint(-6.371120, 106.824950), // Tong Perpustakaan
-    "bin-4" to GeoPoint(-6.372150, 106.823680), // Tong Parkiran Motor
-    "bin-5" to GeoPoint(-6.372280, 106.824650), // Tong Lapangan Olahraga
-    "bin-6" to GeoPoint(-6.371450, 106.823850), // Drop Box B3 Gedung TIK
+    // Gedung Z, Teknik Grafika dan Percetakan (-6.3698868, 106.8229694)
+    "tgp-1" to GeoPoint(-6.369865, 106.822940),
+    "tgp-2" to GeoPoint(-6.369915, 106.823015),
+    // Administrasi Bisnis Building / Administrasi Niaga (-6.3705120, 106.8230210)
+    "an-1" to GeoPoint(-6.370490, 106.822990),
+    "an-2" to GeoPoint(-6.370540, 106.823060),
+    // Gedung F, Akuntansi (-6.3709841, 106.8235127)
+    "akt-1" to GeoPoint(-6.370960, 106.823480),
+    "akt-2" to GeoPoint(-6.371010, 106.823555),
+    // Gedung Q, Direktorat (-6.3708696, 106.8246175)
+    "dir-1" to GeoPoint(-6.370850, 106.824585),
+    "dir-2" to GeoPoint(-6.370895, 106.824655),
+    // Gedung D, Teknik Elektro (-6.3714001, 106.8229715)
+    "elektro-1" to GeoPoint(-6.371380, 106.822945),
+    "elektro-2" to GeoPoint(-6.371425, 106.823015),
+    // Gedung A & Gedung M, Teknik Mesin
+    "mesin-1" to GeoPoint(-6.371419, 106.823570),
+    "mesin-2" to GeoPoint(-6.372484, 106.824917),
+    // Gedung AA, Teknik Informatika dan Komputer (-6.3725201, 106.8239540)
+    "tik-1" to GeoPoint(-6.372495, 106.823920),
+    "tik-2" to GeoPoint(-6.372545, 106.823990),
+    // Gedung T, Departemen Teknik Sipil (-6.3728433, 106.8255591)
+    "sipil-1" to GeoPoint(-6.372820, 106.825525),
+    "sipil-2" to GeoPoint(-6.372870, 106.825595),
+    // Gedung Y, Perpustakaan (-6.3719709, 106.8260983)
+    "perpus-1" to GeoPoint(-6.371971, 106.826098),
+    // Kantin Spirit (-6.3720628, 106.8242151) & Kantin Bawah (-6.3708101, 106.8228436)
+    "kantin-1" to GeoPoint(-6.372063, 106.824215),
+    "kantin-2" to GeoPoint(-6.370810, 106.822844),
+    // Gedung Serba Guna (-6.3705076, 106.8237027)
+    "gsg-1" to GeoPoint(-6.370508, 106.823703),
+    // Masjid Darul Ilmi (-6.3717179, 106.8229797)
+    "masjid-1" to GeoPoint(-6.371718, 106.822980),
 )
 
 private fun BinLocationEntity.toGeoPoint(): GeoPoint =
@@ -195,7 +239,7 @@ fun BinsScreen(nav: NavHostController, scanFlow: ScanFlowViewModel) {
     val pending by scanFlow.pending.collectAsStateWithLifecycle()
     var selectedId by remember(bins, pending) {
         mutableStateOf(
-            bins.firstOrNull { it.binType == pending?.binType }?.id ?: bins.firstOrNull()?.id
+            if (pending != null) bins.firstOrNull { it.binType == pending?.binType }?.id else null
         )
     }
 
@@ -252,9 +296,13 @@ fun BinsScreen(nav: NavHostController, scanFlow: ScanFlowViewModel) {
         nav.navigate(Routes.scan(mode))
     }
 
-    MainScaffold(nav = nav, current = Routes.BINS) { innerPadding ->
+    MainScaffold(
+        nav = nav,
+        current = Routes.BINS,
+        scanMode = if (pending != null) ScanMode.BIN else ScanMode.WASTE,
+    ) { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
-            ScreenHeader("Lokasi Tong PNJ")
+            ScreenHeader(tr("Lokasi Tong PNJ", "PNJ Bin Locations"))
             Column(
                 Modifier
                     .fillMaxSize()
@@ -270,21 +318,28 @@ fun BinsScreen(nav: NavHostController, scanFlow: ScanFlowViewModel) {
                     ) {
                         Column(Modifier.fillMaxWidth().padding(14.dp)) {
                             Text(
-                                "Sampahmu: ${p.itemName} -> Tong ${binLabel(p.binType)}",
+                                tr(
+                                    "Sampahmu: ${p.itemName} -> Tong ${binLabel(p.binType)}",
+                                    "Your waste: ${p.itemName} -> ${binLabel(p.binType)} Bin",
+                                ),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = GreenText,
                             )
                             Text(
-                                "Datangi tong yang ditandai di peta, buang sampahnya, lalu tekan tombol di bawah untuk memotret tong.",
+                                tr(
+                                    "Datangi tong yang ditandai di peta, buang sampahnya, lalu tekan tombol di bawah untuk memotret tong.",
+                                    "Go to the marked bin on the map, dispose of the waste, then tap the button below to snap the bin.",
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = GreenText.copy(alpha = 0.85f),
                             )
                             Spacer(Modifier.height(10.dp))
                             PrimaryButton(
-                                text = "Foto Tong untuk Klaim Poin",
+                                text = tr("Foto Tong untuk Klaim Poin", "Photo Bin to Claim Points"),
                                 onClick = openScan,
                                 icon = Icons.Filled.PhotoCamera,
                                 modifier = Modifier.fillMaxWidth(),
+                                shimmer = true,
                             )
                         }
                     }
@@ -310,7 +365,7 @@ fun BinsScreen(nav: NavHostController, scanFlow: ScanFlowViewModel) {
                 // Kartu aksi bawah sesuai Figma (UI • Lokasi tong sampah: "Pilah di tempat yang tepat" -> "Lanjut verifikasi pembuangan")
                 AppCard(Modifier.fillMaxWidth()) {
                     Text(
-                        "Pilah di tempat yang tepat",
+                        tr("Pilah di tempat yang tepat", "Sort in the right place"),
                         style = MaterialTheme.typography.titleMedium,
                         color = Green900,
                         fontWeight = FontWeight.ExtraBold,
@@ -318,23 +373,34 @@ fun BinsScreen(nav: NavHostController, scanFlow: ScanFlowViewModel) {
                     Spacer(Modifier.height(4.dp))
                     Text(
                         if (pending != null) {
-                            "Buang ${pending!!.itemName} ke tong ${binLabel(pending!!.binType)} terdekat, lalu potret tongnya untuk klaim poin."
+                            tr(
+                                "Buang ${pending!!.itemName} ke tong ${binLabel(pending!!.binType)} terdekat, lalu potret tongnya untuk klaim poin.",
+                                "Dispose of ${pending!!.itemName} in the nearest ${binLabel(pending!!.binType)} bin, then snap the bin to claim points.",
+                            )
                         } else {
-                            "Pilih titik tong sampah terdekat di kampus PNJ, lalu pindai sampah atau verifikasi pembuanganmu."
+                            tr(
+                                "Pilih titik tong sampah terdekat di kampus PNJ, lalu pindai sampah atau verifikasi pembuanganmu.",
+                                "Choose the nearest waste bin on PNJ campus, then scan waste or verify your disposal.",
+                            )
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = Muted,
                     )
                     Spacer(Modifier.height(12.dp))
                     PrimaryButton(
-                        text = if (pending != null) "Lanjut verifikasi pembuangan" else "Mulai Scan Sampah",
+                        text = if (pending != null) {
+                            tr("Lanjut verifikasi pembuangan", "Continue disposal verification")
+                        } else {
+                            tr("Mulai Scan Sampah", "Start Waste Scan")
+                        },
                         onClick = openScan,
                         icon = Icons.Filled.PhotoCamera,
                         modifier = Modifier.fillMaxWidth(),
+                        shimmer = true,
                     )
                 }
 
-                Text("Daftar titik tong sampah", style = MaterialTheme.typography.titleSmall, color = Green900)
+                Text(tr("Daftar titik tong sampah", "Waste bin locations"), style = MaterialTheme.typography.titleSmall, color = Green900)
                 bins.forEach { bin ->
                     val isRecommended = pending?.binType == bin.binType
                     val isSelected = selectedId == bin.id
@@ -363,7 +429,7 @@ fun BinsScreen(nav: NavHostController, scanFlow: ScanFlowViewModel) {
                                     buildString {
                                         append("${bin.areaLabel} • ${binLabel(bin.binType)}")
                                         if (dist != null) append(" • ~$dist m")
-                                        if (isRecommended) append(" • Cocok untuk sampahmu")
+                                        if (isRecommended) append(tr(" • Cocok untuk sampahmu", " • Matches your waste"))
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (isRecommended) GreenText else Muted,
@@ -394,13 +460,22 @@ private fun CampusMapCard(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val mapView = remember {
+        val appContext = context.applicationContext
+        val osmdroidPrefs = appContext.getSharedPreferences("osmdroid_pnj", Context.MODE_PRIVATE)
+        val osmdroidDir = File(appContext.cacheDir, "osmdroid_pnj")
+        val tileCacheDir = File(osmdroidDir, "tiles").apply { mkdirs() }
         Configuration.getInstance().apply {
-            userAgentValue = context.packageName
+            osmdroidBasePath = osmdroidDir
+            osmdroidTileCache = tileCacheDir
+            load(appContext, osmdroidPrefs)
+            tileDownloadThreads = 2
+            // Pakai User-Agent khusus aplikasi PNJ agar tidak ditolak kebijakan tile OSM (403 com.example.*).
+            userAgentValue = "ReSortCampusPNJ/1.0 (id.ac.pnj.resortcampus)"
         }
         MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
+            setTileSource(PNJ_OSM_TILE_SOURCE)
             setMultiTouchControls(true)
-            controller.setZoom(17.5)
+            controller.setZoom(17.0)
             controller.setCenter(PNJ_CENTER)
             setOnTouchListener { v, event ->
                 when (event.actionMasked) {
@@ -431,7 +506,7 @@ private fun CampusMapCard(
 
     LaunchedEffect(selectedId, bins) {
         val target = bins.firstOrNull { it.id == selectedId }?.toGeoPoint() ?: return@LaunchedEffect
-        mapView.controller.animateTo(target, 18.2, 450L)
+        mapView.controller.animateTo(target, 18.4, 450L)
     }
 
     AppCard(Modifier.fillMaxWidth()) {
@@ -443,23 +518,23 @@ private fun CampusMapCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.MyLocation, null, tint = Green500, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Peta Kampus PNJ (Real-Time)", style = MaterialTheme.typography.titleSmall, color = Green900)
+                Text(tr("Peta Kampus PNJ (Real-Time)", "PNJ Campus Map (Real-Time)"), style = MaterialTheme.typography.titleSmall, color = Green900)
             }
-            Text("Ketuk pin", style = MaterialTheme.typography.labelSmall, color = Muted)
+            Text(tr("Ketuk pin", "Tap pin"), style = MaterialTheme.typography.labelSmall, color = Muted)
         }
         Spacer(Modifier.height(8.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MapQuickChip(
                 icon = Icons.Filled.School,
-                label = "Kampus PNJ",
+                label = tr("Kampus PNJ", "PNJ Campus"),
                 onClick = {
-                    mapView.controller.animateTo(PNJ_CENTER, 17.5, 450L)
+                    mapView.controller.animateTo(PNJ_CENTER, 17.0, 450L)
                 },
             )
             MapQuickChip(
                 icon = Icons.Filled.LocationSearching,
-                label = if (hasLocationPermission) "Lokasi Saya" else "Aktifkan GPS",
+                label = if (hasLocationPermission) tr("Lokasi Saya", "My Location") else tr("Aktifkan GPS", "Enable GPS"),
                 onClick = {
                     if (!hasLocationPermission) {
                         onRequestLocation()
@@ -497,7 +572,7 @@ private fun CampusMapCard(
                             snippet = buildString {
                                 append("${bin.areaLabel} • ${binLabel(bin.binType)}")
                                 if (dist != null) append(" (~$dist m)")
-                                if (isRecommended) append(" ★ Rekomendasi")
+                                if (isRecommended) append(tr(" ★ Rekomendasi", " ★ Recommended"))
                             }
                             icon = createBinMarkerDrawable(
                                 context = context,
@@ -518,8 +593,8 @@ private fun CampusMapCard(
                         val userMarker = Marker(view).apply {
                             position = userLocation
                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                            title = "Lokasi Kamu"
-                            snippet = "Posisi GPS saat ini"
+                            title = tr("Lokasi Kamu", "Your Location")
+                            snippet = tr("Posisi GPS saat ini", "Current GPS position")
                             icon = createUserLocationDrawable(context)
                         }
                         view.overlays.add(userMarker)

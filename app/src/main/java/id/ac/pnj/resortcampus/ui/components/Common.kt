@@ -1,5 +1,10 @@
 package id.ac.pnj.resortcampus.ui.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,9 +46,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +68,8 @@ import id.ac.pnj.resortcampus.ui.theme.GreenSoft
 import id.ac.pnj.resortcampus.ui.theme.GreenText
 import id.ac.pnj.resortcampus.ui.theme.Line
 import id.ac.pnj.resortcampus.ui.theme.Muted
+import id.ac.pnj.resortcampus.util.isEnglish
+import id.ac.pnj.resortcampus.util.tr
 import java.util.Locale
 
 @Composable
@@ -78,6 +89,52 @@ fun AppCard(
 }
 
 @Composable
+fun Modifier.shimmerSweep(
+    enabled: Boolean = true,
+    alpha: Float = 0.28f,
+    durationMillis: Int = 2200,
+    pauseMillis: Int = 600,
+    bandFraction: Float = 0.36f,
+    tint: Color = Color.White,
+): Modifier {
+    if (!enabled) return this
+    val sweepMs = durationMillis.coerceAtLeast(200)
+    val totalMs = (sweepMs + pauseMillis.coerceAtLeast(0)).coerceAtLeast(300)
+    val transition = rememberInfiniteTransition(label = "shimmerSweep")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                this.durationMillis = totalMs
+                0f at 0 using LinearEasing
+                1f at sweepMs using LinearEasing
+                1f at totalMs
+            },
+        ),
+        label = "shimmerX",
+    )
+    return this.drawWithContent {
+        drawContent()
+        val w = size.width
+        if (w > 0f && progress < 0.999f) {
+            val x = -w * 0.45f + w * 1.9f * progress
+            drawRect(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        tint.copy(alpha = alpha),
+                        Color.Transparent,
+                    ),
+                    start = Offset(x, 0f),
+                    end = Offset(x + w * bandFraction, size.height * 0.65f),
+                ),
+            )
+        }
+    }
+}
+
+@Composable
 fun PrimaryButton(
     text: String,
     onClick: () -> Unit,
@@ -85,11 +142,15 @@ fun PrimaryButton(
     enabled: Boolean = true,
     loading: Boolean = false,
     icon: ImageVector? = null,
+    shimmer: Boolean = false,
 ) {
     Button(
         onClick = onClick,
         enabled = enabled && !loading,
-        modifier = modifier.heightIn(min = 52.dp),
+        modifier = modifier
+            .heightIn(min = 52.dp)
+            .clip(CircleShape)
+            .shimmerSweep(enabled = shimmer && enabled && !loading),
         shape = CircleShape,
         colors = ButtonDefaults.buttonColors(containerColor = Green900, contentColor = Color.White),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
@@ -162,7 +223,7 @@ fun ScreenHeader(title: String, onBack: (() -> Unit)? = null, actions: @Composab
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Green900)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Kembali", "Back"), tint = Green900)
             }
         } else {
             Spacer(Modifier.width(16.dp))
@@ -268,10 +329,10 @@ fun binColor(binType: String): Color = when (binType) {
 }
 
 fun binLabel(binType: String): String = when (binType) {
-    "anorganik" -> "Anorganik"
-    "organik" -> "Organik"
-    "kertas" -> "Kertas"
-    "b3" -> "B3 / Elektronik"
+    "anorganik" -> tr("Anorganik", "Inorganic")
+    "organik" -> tr("Organik", "Organic")
+    "kertas" -> tr("Kertas", "Paper")
+    "b3" -> tr("B3 / Elektronik", "Hazardous / E-Waste")
     else -> binType.replaceFirstChar { it.titlecase(Locale.getDefault()) }
 }
 
@@ -284,16 +345,45 @@ fun binIcon(binType: String): ImageVector = when (binType) {
 
 fun String.capitalized(): String = replaceFirstChar { it.titlecase(Locale.getDefault()) }
 
-fun formatKg(kg: Double): String = String.format(Locale("id", "ID"), "%.2f kg", kg)
+fun formatKg(kg: Double): String = String.format(if (isEnglish()) Locale.US else Locale("id", "ID"), "%.2f kg", kg)
 
 fun formatRelative(time: Long, now: Long = System.currentTimeMillis()): String {
     val diff = (now - time).coerceAtLeast(0)
     val min = diff / 60_000
+    val en = isEnglish()
     return when {
-        min < 1 -> "Baru saja"
-        min < 60 -> "$min menit lalu"
-        min < 60 * 24 -> "${min / 60} jam lalu"
-        min < 60 * 24 * 7 -> "${min / (60 * 24)} hari lalu"
-        else -> java.text.SimpleDateFormat("d MMM yyyy", Locale("id", "ID")).format(java.util.Date(time))
+        min < 1 -> if (en) "Just now" else "Baru saja"
+        min < 60 -> if (en) "$min min ago" else "$min menit yang lalu"
+        min < 60 * 24 -> if (en) "${min / 60} hours ago" else "${min / 60} jam yang lalu"
+        min < 60 * 24 * 7 -> if (en) "${min / (60 * 24)} days ago" else "${min / (60 * 24)} hari yang lalu"
+        else -> java.text.SimpleDateFormat("d MMM yyyy", if (en) Locale.US else Locale("id", "ID")).format(java.util.Date(time))
+    }
+}
+
+
+fun formatNum(n: Int): String = String.format(java.util.Locale.GERMANY, "%,d", n)
+
+@Composable
+fun ProgressBar(
+    value: Float,
+    height: androidx.compose.ui.unit.Dp = 6.dp,
+    trackColor: Color = Color(0xFFCDE2D6),
+    fillColor: Color = Color(0xFF1D4433),
+) {
+    val clamped = value.coerceIn(0f, 1f)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(CircleShape)
+            .background(trackColor),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(clamped)
+                .height(height)
+                .clip(CircleShape)
+                .background(fillColor),
+        )
     }
 }

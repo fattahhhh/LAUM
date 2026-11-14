@@ -1,5 +1,6 @@
 package id.ac.pnj.resortcampus
 
+import id.ac.pnj.resortcampus.data.Badges
 import id.ac.pnj.resortcampus.data.PasswordHasher
 import id.ac.pnj.resortcampus.data.Points
 import id.ac.pnj.resortcampus.data.ai.MockAi
@@ -22,6 +23,20 @@ class CoreLogicTest {
         assertEquals(15, Points.ruleFor("plastik").points)
         assertEquals(25, Points.ruleFor("elektronik").points)
         assertEquals(5, Points.ruleFor("tidak-dikenal").points)
+    }
+
+    @Test
+    fun badges_requireAtLeastTenPhotosAndIncreaseProgressively() {
+        val all = Badges.ALL
+        assertEquals(0, all[0].threshold)
+        assertEquals(10, all[1].threshold)
+        var prevDelta = all[1].threshold - all[0].threshold
+        assertTrue(prevDelta >= 10)
+        for (i in 2 until all.size) {
+            val delta = all[i].threshold - all[i - 1].threshold
+            assertTrue("Badge ${i + 1} delta ($delta) should be > previous ($prevDelta)", delta > prevDelta)
+            prevDelta = delta
+        }
     }
 
     @Test
@@ -52,5 +67,13 @@ class CoreLogicTest {
 
         val bin = OnDeviceWasteClassifier.verifyBinLabels(listOf("Waste container" to 0.88f))
         assertTrue(bin.isBin)
+
+        val bucketBin = OnDeviceWasteClassifier.verifyBinLabels(listOf("Bucket" to 0.80f, "Plastic" to 0.72f))
+        assertTrue(bucketBin.isBin)
+
+        assertFalse(OnDeviceWasteClassifier.verifyBinLabels(listOf("Bottle" to 0.90f, "Plastic" to 0.85f)).isBin)
+        assertFalse(OnDeviceWasteClassifier.verifyBinLabels(listOf("Keyboard" to 0.91f, "Computer" to 0.88f)).isBin)
+        assertFalse(OnDeviceWasteClassifier.verifyBinLabels(listOf("Person" to 0.95f, "Face" to 0.92f)).isBin)
+        assertFalse(OnDeviceWasteClassifier.verifyBinLabels(emptyList()).isBin)
     }
 }
