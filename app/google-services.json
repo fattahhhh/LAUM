@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "797337024915",
+    "project_id": "hazel-sphinx-470804-a9",
+    "storage_bucket": "hazel-sphinx-470804-a9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:797337024915:android:19c213a23baf9fd8021066",
+        "android_client_info": {
+          "package_name": "com.example.komunikasi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJlIF0SNfIwsCS3K25aNFZs-iU6ITzHLY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:797337024915:android:3235fbb742f12261021066",
+        "android_client_info": {
+          "package_name": "com.example.laum"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJlIF0SNfIwsCS3K25aNFZs-iU6ITzHLY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:797337024915:android:5a55e0ba14eb417a021066",
+        "android_client_info": {
+          "package_name": "com.example.todoapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJlIF0SNfIwsCS3K25aNFZs-iU6ITzHLY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
